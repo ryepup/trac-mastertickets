@@ -7,8 +7,23 @@ from trac.ticket.model import Ticket
 from trac.util.compat import set, sorted
 from trac.util.datefmt import utc, to_utimestamp
 
+def all_links(env):
+    db = env.get_read_db()
+    cur = db.cursor()
+    data = None
+    try:
+        cur.execute('SELECT source, dest FROM mastertickets')
+        data = list(cur.fetchall())
+    except Exception, e:
+        env.log.exception('Error fetching list of ticket links: %s', e)
+
+    return data
+    
+
 class TicketLinks(object):
     """A model for the ticket links used MasterTickets."""
+
+        
     
     def __init__(self, env, tkt, db=None):
         self.env = env

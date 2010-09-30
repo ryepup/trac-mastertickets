@@ -12,6 +12,8 @@ import db_default
 from model import TicketLinks
 from trac.ticket.model import Ticket
 
+import macro_provider
+
 class MasterTicketsSystem(Component):
     """Central functionality for the MasterTickets plugin."""
 
