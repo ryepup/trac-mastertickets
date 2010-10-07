@@ -1,4 +1,4 @@
-import subprocess
+import subprocess, time
 
 from pkg_resources import resource_filename
 from genshi.core import Markup, START, END, TEXT
@@ -109,9 +109,16 @@ class MasterTicketsModule(Component):
     def validate_ticket(self, req, ticket):
         if req.args.get('action') == 'resolve':
             links = TicketLinks(self.env, ticket)
+
             for i in links.blocked_by:
                 if Ticket(self.env, i)['status'] != 'closed':
-                    yield None, 'Ticket #%s is blocking this ticket'%i
+                    user_warned = 'mastertickets-warning-#%s'%links.tkt.id
+                    if req.session.has_key(user_warned) and time.time() - float(req.session[user_warned]) < 30:
+                        #ignoring the warning, clear session and keep going.
+                        del(req.session[user_warned])
+                    else:
+                        req.session[user_warned] = time.time()
+                        yield None, 'Ticket #%s is blocking this ticket.  Submit changes again in the next 30s to resolve this ticket anyway.'%i
 
     # ITemplateProvider methods
     def get_htdocs_dirs(self):
