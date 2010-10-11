@@ -36,7 +36,10 @@ class MasterTicketsMacros(Component):
     def get_macro_description(self,name):
         """Return a plain text description of the macro with the specified
         name."""
-        desc ={'DepGraph': 'shows the dependency graph for all tickets, can customize a few colors'}
+        keys = MasterTicketsMacros.DEFAULT_OPTIONS.keys()
+        keys.sort()
+        desc ={'DepGraph': "shows the dependency graph for all tickets, can customize a few colors:\n%s" % 
+               '\n'.join([" * {{{%s}}}: {{{%s}}}" % (k, MasterTicketsMacros.DEFAULT_OPTIONS[k]) for k in keys])}
         return desc[name]
 
     def expand_macro(self,formatter, name, content, args=None):
