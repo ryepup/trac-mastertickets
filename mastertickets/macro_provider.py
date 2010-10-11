@@ -17,6 +17,16 @@ class MasterTicketsMacros(Component):
 
     implements(IWikiMacroProvider)
 
+    DEFAULT_OPTIONS = {'unblocked_color':"#4ECDC4",
+                'unblocked_linkcolor':"blue",
+                'blocked_color':"black",
+                'blocked_linkcolor':"blue",
+                'closed_color':"#556270",
+                'closed_linkcolor':"#4ECDC4",
+                'critical_color':"#C7F464",
+                'critical_linkcolor':"blue",
+                'fontsize':"12"}
+
 
     def get_macros(self):
         """Return an iterable that provides the names of the provided macros.
@@ -61,10 +71,7 @@ class MasterTicketsMacros(Component):
             return '"%s"' % txt.replace('"', '\\"')
 
         # http://www.colourlovers.com/palette/1930/cheer_up_emo_kid
-        opts = {'unblocked_color':"#4ECDC4",
-                'closed_color':"#556270",
-                'closed_linkcolor':"#4ECDC4",
-                'fontsize':"12"}
+        opts = MasterTicketsMacros.DEFAULT_OPTIONS.copy()
         opts['label'] =  "as of %s" % time.asctime()
         opts['graph_name'] = str(int(time.time()))
 
@@ -103,13 +110,20 @@ digraph %s{
             for (tktid, tkt) in tickets.items():
                 #default options
                 nodeopts = {'label':q(tkt['summary']),
-                            'fontcolor':"blue",
+                            'color': q(opts['blocked_color']),
+                            'fontcolor':q(opts['blocked_linkcolor']),
                             'fontsize':q(opts['fontsize']),
                             'URL':q(self.env.href.ticket(tktid))}
                 
                 # color differently if we're not blocked
                 if tktid not in blocked_ids:
                     nodeopts['color'] = q(opts['unblocked_color'])
+                    nodeopts['fontcolor'] = q(opts['unblocked_linkcolor'])
+                    nodeopts['style'] = "filled"
+
+                if tkt['priority'] == 'critical':
+                    nodeopts['color'] = q(opts['critical_color'])
+                    nodeopts['fontcolor'] = q(opts['critical_linkcolor'])
                     nodeopts['style'] = "filled"
 
                 # color differently if we're closed
