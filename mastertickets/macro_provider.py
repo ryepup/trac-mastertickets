@@ -140,6 +140,20 @@ digraph %s{
                     dot.write('%s=%s,' % (k, v))
                 dot.write("]\n")
 
+            dot.write("""subgraph cluster0{
+  label="Legend"
+""")
+            dot.write("closed[label=\"Closed / Done\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
+                      (q(opts['closed_color']),q(opts['closed_linkcolor']),q(opts['fontsize']),))
+            dot.write("unblocked[label=\"Unblocked / Ready\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
+                      (q(opts['unblocked_color']),q(opts['unblocked_linkcolor']),q(opts['fontsize']),))
+            dot.write("critical[label=\"Active\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
+                      (q(opts['critical_color']),q(opts['critical_linkcolor']),q(opts['fontsize']),))
+            dot.write("blocked[label=\"Blocked / Waiting\",color=%s,fontcolor=%s,fontsize=%s]\n" %
+                      (q(opts['blocked_color']),q(opts['blocked_linkcolor']),q(opts['fontsize']),))
+
+            dot.write("}")
+
             dot.write("""}
 }}}""")
 
