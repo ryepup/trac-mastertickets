@@ -1,7 +1,7 @@
 # Created by Ryan Davis and Russ Tyndall on 2010-09-30.
 # Copyright (c) 2010 Ryan Davis. All rights reserved.
 import time
-
+from trac.web.href import Href
 from trac.core import *
 from trac.env import IEnvironmentSetupParticipant
 from trac.db import DatabaseManager
@@ -125,13 +125,14 @@ digraph %s{
             
 
             #render the nodes
+            h = Href(formatter.req.base_url)
             for (tktid, tkt) in tickets.items():
-                #default options
+                #default options                
                 nodeopts = {'label':q(tkt['summary']),
                             'color': q(opts['blocked_color']),
                             'fontcolor':q(opts['blocked_linkcolor']),
                             'fontsize':q(opts['fontsize']),
-                            'URL':q(self.env.href.ticket(tktid))}
+                            'URL':q(h.ticket(tktid))}
                 
                 # color differently if we're not blocked
                 if tktid not in blocked_ids:
@@ -166,7 +167,6 @@ digraph %s{
         except Exception, e:
             self.log.exception('RPD%s', e)
             TracError(e)
-
         return final
    
  
