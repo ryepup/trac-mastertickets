@@ -99,9 +99,12 @@ class MasterTicketsMacros(Component):
         
         self.__dict__.update(opts)
 
+
+        self.milestone = [x.lower() for x in self.milestone.split('|') if len(x)>0]
+
         def has_good_milestone(tkt):
             if self.milestone:
-                return tkt['milestone'] and tkt['milestone'].lower() == self.milestone.lower()
+                return tkt['milestone'] and tkt['milestone'].lower() in self.milestone
             else:
                 return True
 
