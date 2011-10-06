@@ -121,7 +121,7 @@ class TicketLinks(object):
             arr2 = []
             for tkt in arr:
                 if isinstance(tkt, Ticket):
-                    tkt = tkt.id
+                    tkt = str(tkt.id)
                 arr2.append(tkt)
             return '[%s]'%','.join(arr2)
             

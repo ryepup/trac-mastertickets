@@ -5,7 +5,7 @@ from trac.web.href import Href
 from trac.core import *
 from trac.env import IEnvironmentSetupParticipant
 from trac.db import DatabaseManager
-from trac.wiki.api import IWikiMacroProvider
+from trac.wiki.api import IWikiMacroProvider, parse_args
 from trac.wiki.formatter import Formatter
 from trac.ticket.model import Ticket
 from model import *
@@ -25,7 +25,11 @@ class MasterTicketsMacros(Component):
                 'closed_linkcolor':"#4ECDC4",
                 'critical_color':"#C7F464",
                 'critical_linkcolor':"blue",
-                'fontsize':"12"}
+                'fontsize':"12",
+                'show_ticket_number':"1",
+                'milestone':'',
+                'group_by_milestone':'1',
+                'debug':'0'}
 
 
     def get_macros(self):
@@ -77,96 +81,175 @@ class MasterTicketsMacros(Component):
         opts = MasterTicketsMacros.DEFAULT_OPTIONS.copy()
         opts['label'] =  "as of %s" % time.asctime()
         opts['graph_name'] = str(int(time.time()))
+        
+        if args == None and content:
+            x,args = parse_args(content)
+            
 
         if args:
-            opts.update(args)
+            opts.update(args)        
+
+        # convert boolean options to actual booleans
+        for bopt in ['show_ticket_number','group_by_milestone', 'debug']:
+            opts[bopt] = opts[bopt] == '1'
+
+        # quote things we should quote
+        for o in ['unblocked_color','unblocked_linkcolor', 'blocked_color', 'blocked_linkcolor', 'closed_color', 'closed_linkcolor', 'critical_color', 'critical_linkcolor', 'label', 'graph_name']:
+            opts[o] = q(opts[o])
+        
+        self.__dict__.update(opts)
+
+        def has_good_milestone(tkt):
+            if self.milestone:
+                return tkt['milestone'] and tkt['milestone'].lower() == self.milestone.lower()
+            else:
+                return True
+
+        tickets = {}
+        def ensure_ticket(tktid):
+            if not tickets.has_key(tktid):
+                tkt = Ticket(self.env, tktid)
+                if has_good_milestone(tkt):
+                    tickets[tktid] = tkt
+                    tickets[tktid]['mastertickets_blocking'] = set()
+            return tickets.get(tktid)
+
 
         #parse args from content
         final = "error"
         try:
             dot = StringIO()
-            dot.write("""{{{
-#!graphviz
-digraph %s{
+            dot.write("""digraph %s{
   label=%s
-""" % (q(opts['graph_name']), q(opts['label'])))
+""" % (self.graph_name, self.label))
 
             dot.write("""subgraph cluster0{
   label="Legend"
 """)
             dot.write("closed[label=\"Closed / Done\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (q(opts['closed_color']),q(opts['closed_linkcolor']),q(opts['fontsize']),))
+                      (self.closed_color,self.closed_linkcolor,self.fontsize,))
             dot.write("unblocked[label=\"Unblocked / Ready\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (q(opts['unblocked_color']),q(opts['unblocked_linkcolor']),q(opts['fontsize']),))
+                      (self.unblocked_color,self.unblocked_linkcolor,self.fontsize,))
             dot.write("critical[label=\"Active\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (q(opts['critical_color']),q(opts['critical_linkcolor']),q(opts['fontsize']),))
+                      (self.critical_color,self.critical_linkcolor,self.fontsize,))
             dot.write("blocked[label=\"Blocked / Waiting\",color=%s,fontcolor=%s,fontsize=%s]\n" %
-                      (q(opts['blocked_color']),q(opts['blocked_linkcolor']),q(opts['fontsize']),))
+                      (self.blocked_color,self.blocked_linkcolor,self.fontsize,))
 
             dot.write("}")
 
-            tickets = {}
-            def ensure_ticket(tkt):
-                if not tickets.has_key(tkt):
-                    tickets[tkt] = Ticket(self.env, tkt)
-                return tickets[tkt]
 
-            blocked = {}
+            blocked_ids = set()
 
             #render the edges and build up some hashes we'll need for node rendering
             for (src, dst) in all_links(self.env):
-                dot.write("ticket%s -> ticket%s\n" % (src, dst))
                 tkt = ensure_ticket(src)
-                ensure_ticket(dst)
-                if tkt['status'] != 'closed':
-                    blocked[dst] = True
-            
-            blocked_ids = blocked.keys()
-            
+                if tkt == None:
+                    continue
+                if ensure_ticket(dst) != None:                
+                    tkt['mastertickets_blocking'].add(dst)
+                    if tkt['status'] != 'closed':
+                        blocked_ids.add(dst)
 
+            edges = StringIO()
             #render the nodes
             h = Href(formatter.req.base_url)
-            for (tktid, tkt) in tickets.items():
-                #default options                
-                nodeopts = {'label':q(tkt['summary']),
-                            'color': q(opts['blocked_color']),
-                            'fontcolor':q(opts['blocked_linkcolor']),
-                            'fontsize':q(opts['fontsize']),
-                            'URL':q(h.ticket(tktid))}
+            default_nodeopts = {'color': self.blocked_color,
+                                'fontcolor':self.blocked_linkcolor,
+                                'fontsize':self.fontsize}
+
+            unblocked_attributes = {'color': self.unblocked_color,
+                                    'fontcolor':self.unblocked_linkcolor,
+                                    'style': "filled"}
+            
+            critical_attributes = {'color': self.critical_color,
+                                    'fontcolor':self.critical_linkcolor,
+                                    'style': "filled"}
+
+            closed_attributes = {'color': self.closed_color,
+                                 'fontcolor':self.closed_linkcolor,
+                                 'style': "filled"}
+            
+
+            def write_ticket_node(writer, tktid, tkt):
+                nodeopts = default_nodeopts.copy()
+                nodeopts['URL'] = q(h.ticket(tktid))
+
+                nodeopts['label'] = q(tkt['summary'])
+
+                if self.show_ticket_number:
+                    nodeopts['shape'] = 'record'
+                    nodeopts['label'] = q('%s|%s' % (tktid, tkt['summary']))
+
+
                 
                 # color differently if we're not blocked
                 if tktid not in blocked_ids:
-                    nodeopts['color'] = q(opts['unblocked_color'])
-                    nodeopts['fontcolor'] = q(opts['unblocked_linkcolor'])
-                    nodeopts['style'] = "filled"
+                    nodeopts.update(unblocked_attributes)
 
                 if tkt['priority'] == 'critical':
-                    nodeopts['color'] = q(opts['critical_color'])
-                    nodeopts['fontcolor'] = q(opts['critical_linkcolor'])
-                    nodeopts['style'] = "filled"
+                    nodeopts.update(critical_attributes)
 
                 # color differently if we're closed
                 if tkt['status'] == 'closed':
-                    nodeopts['color'] = q(opts['closed_color'])
-                    nodeopts['fontcolor'] = q(opts['closed_linkcolor'])
-                    nodeopts['style'] = "filled"
+                    nodeopts.update(closed_attributes)
 
-                dot.write("ticket%s [" % tktid)
+                writer.write("ticket%s [" % tktid)
                 for k,v in nodeopts.items():
-                    dot.write('%s=%s,' % (k, v))
-                dot.write("]\n")
+                    writer.write('%s=%s,' % (k, v))
+                writer.write("]\n")
 
+                for dst in tkt['mastertickets_blocking']:
+                    edges.write("ticket%s -> ticket%s" % (tktid, dst))
+                    if tkt['status'] == 'closed':
+                        edges.write(" [style=dashed,color=%s]" % (self.closed_color))
+                    edges.write('\n')
 
+            milestones = {}
 
-            dot.write("""}
-}}}""")
+            def milestone_writer(milestone):
+                if not milestones.has_key(milestone):
+                    milestones[milestone] = StringIO()
+                return milestones[milestone]
+
+            for (tktid, tkt) in tickets.items():
+                writer = self.group_by_milestone and milestone_writer(tkt['milestone']) or dot
+                write_ticket_node(writer, tktid, tkt)
+
+            
+
+            cluster = 1
+            for milestone,io in milestones.items():
+                if milestone == '':
+                    dot.write(io.getvalue())
+                else:
+                    dot.write("""
+subgraph cluster%s{
+  label=%s
+%s
+}
+""" % (cluster, q(milestone), io.getvalue()))
+                    cluster += 1
+
+            dot.write(edges.getvalue())
+            dot.write("}")
 
             out = StringIO()
-            Formatter(formatter.env, formatter.context).format(dot.getvalue(), out)
+            graphviz = StringIO()
+            graphviz.write("""{{{#!graphviz
+%s
+}}}""" % (dot.getvalue()))
+            if self.debug:
+                graphviz.write("""
+{{{
+%s
+}}}""" % (dot.getvalue()))
+
+            Formatter(formatter.env, formatter.context).format(graphviz.getvalue(), out)
             final = Markup(out.getvalue())
         except Exception, e:
             self.log.exception('RPD%s', e)
             TracError(e)
+            final = '%s' % (e)
         return final
    
  
