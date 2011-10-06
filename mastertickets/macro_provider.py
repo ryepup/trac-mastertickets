@@ -145,12 +145,14 @@ class MasterTicketsMacros(Component):
 
             #render the edges and build up some hashes we'll need for node rendering
             for (src, dst) in all_links(self.env):
-                tkt = ensure_ticket(src)
-                if tkt == None:
+                src_tkt = ensure_ticket(src)
+                dst_tkt = ensure_ticket(dst)
+
+                if src_tkt == None:
                     continue
-                if ensure_ticket(dst) != None:                
-                    tkt['mastertickets_blocking'].add(dst)
-                    if tkt['status'] != 'closed':
+                if dst_tkt != None:
+                    src_tkt['mastertickets_blocking'].add(dst)
+                    if src_tkt['status'] != 'closed':
                         blocked_ids.add(dst)
 
             edges = StringIO()
