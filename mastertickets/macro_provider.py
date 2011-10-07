@@ -12,6 +12,11 @@ from model import *
 from StringIO import StringIO
 from genshi.core import Markup
 
+class Options:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+    
+
 class MasterTicketsMacros(Component):
     """Central functionality for the MasterTickets plugin."""
 
@@ -97,14 +102,16 @@ class MasterTicketsMacros(Component):
         for o in ['unblocked_color','unblocked_linkcolor', 'blocked_color', 'blocked_linkcolor', 'closed_color', 'closed_linkcolor', 'critical_color', 'critical_linkcolor', 'label', 'graph_name']:
             opts[o] = q(opts[o])
         
-        self.__dict__.update(opts)
+        opts = Options(**opts)
 
 
-        self.milestone = [x.lower() for x in self.milestone.split('|') if len(x)>0]
+
+
+        opts.milestone = [x.lower() for x in opts.milestone.split('|') if len(x)>0]
 
         def has_good_milestone(tkt):
-            if self.milestone:
-                return tkt['milestone'] and tkt['milestone'].lower() in self.milestone
+            if opts.milestone:
+                return tkt['milestone'] and tkt['milestone'].lower() in opts.milestone
             else:
                 return True
 
@@ -117,6 +124,29 @@ class MasterTicketsMacros(Component):
                     tickets[tktid]['mastertickets_blocking'] = set()
             return tickets.get(tktid)
 
+        default_nodeopts = {'color': opts.blocked_color,
+                            'fontcolor':opts.blocked_linkcolor,
+                            'fontsize':opts.fontsize,
+                            'margin':'.15,.15'}
+
+        unblocked_attributes = {'color': opts.unblocked_color,
+                                'fontcolor':opts.unblocked_linkcolor,
+                                'style': "filled"}
+            
+        critical_attributes = {'color': opts.critical_color,
+                               'fontcolor':opts.critical_linkcolor,
+                               'style': "filled"}
+
+        closed_attributes = {'color': opts.closed_color,
+                             'fontcolor':opts.closed_linkcolor,
+                             'style': "filled"}
+
+        def write_node(writer, node_name, **attrs):
+            writer.write("%s [" % node_name)            
+            for k,v in attrs.items():
+                writer.write('%s=%s,' % (k, v))
+            writer.write("]\n")
+            
 
         #parse args from content
         final = "error"
@@ -124,19 +154,18 @@ class MasterTicketsMacros(Component):
             dot = StringIO()
             dot.write("""digraph %s{
   label=%s
-""" % (self.graph_name, self.label))
+""" % (opts.graph_name, opts.label))
+            
+            write_node(dot, 'node', **default_nodeopts)
 
             dot.write("""subgraph cluster0{
   label="Legend"
 """)
-            dot.write("closed[label=\"Closed / Done\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (self.closed_color,self.closed_linkcolor,self.fontsize,))
-            dot.write("unblocked[label=\"Unblocked / Ready\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (self.unblocked_color,self.unblocked_linkcolor,self.fontsize,))
-            dot.write("critical[label=\"Active\",color=%s,fontcolor=%s,fontsize=%s,style=filled]\n" %
-                      (self.critical_color,self.critical_linkcolor,self.fontsize,))
-            dot.write("blocked[label=\"Blocked / Waiting\",color=%s,fontcolor=%s,fontsize=%s]\n" %
-                      (self.blocked_color,self.blocked_linkcolor,self.fontsize,))
+
+            write_node(dot, 'closed', label=q('Closed / Done'), **closed_attributes)
+            write_node(dot, 'unblocked', label=q('Unblocked / Ready'), **unblocked_attributes)
+            write_node(dot, 'critical', label=q('Active'), **critical_attributes)
+            write_node(dot, 'blocked', label=q('Blocked'))
 
             dot.write("}")
 
@@ -158,21 +187,7 @@ class MasterTicketsMacros(Component):
             edges = StringIO()
             #render the nodes
             h = Href(formatter.req.base_url)
-            default_nodeopts = {'color': self.blocked_color,
-                                'fontcolor':self.blocked_linkcolor,
-                                'fontsize':self.fontsize}
 
-            unblocked_attributes = {'color': self.unblocked_color,
-                                    'fontcolor':self.unblocked_linkcolor,
-                                    'style': "filled"}
-            
-            critical_attributes = {'color': self.critical_color,
-                                    'fontcolor':self.critical_linkcolor,
-                                    'style': "filled"}
-
-            closed_attributes = {'color': self.closed_color,
-                                 'fontcolor':self.closed_linkcolor,
-                                 'style': "filled"}
             
 
             def write_ticket_node(writer, tktid, tkt):
@@ -181,7 +196,7 @@ class MasterTicketsMacros(Component):
 
                 nodeopts['label'] = q(tkt['summary'])
 
-                if self.show_ticket_number:
+                if opts.show_ticket_number:
                     nodeopts['shape'] = 'record'
                     nodeopts['label'] = q('%s|%s' % (tktid, tkt['summary']))
 
@@ -206,7 +221,7 @@ class MasterTicketsMacros(Component):
                 for dst in tkt['mastertickets_blocking']:
                     edges.write("ticket%s -> ticket%s" % (tktid, dst))
                     if tkt['status'] == 'closed':
-                        edges.write(" [style=dashed,color=%s]" % (self.closed_color))
+                        edges.write(" [style=dashed,color=%s]" % (opts.closed_color))
                     edges.write('\n')
 
             milestones = {}
@@ -217,7 +232,7 @@ class MasterTicketsMacros(Component):
                 return milestones[milestone]
 
             for (tktid, tkt) in tickets.items():
-                writer = self.group_by_milestone and milestone_writer(tkt['milestone']) or dot
+                writer = opts.group_by_milestone and milestone_writer(tkt['milestone']) or dot
                 write_ticket_node(writer, tktid, tkt)
 
             
@@ -243,7 +258,7 @@ subgraph cluster%s{
             graphviz.write("""{{{#!graphviz
 %s
 }}}""" % (dot.getvalue()))
-            if self.debug:
+            if opts.debug:
                 graphviz.write("""
 {{{
 %s
