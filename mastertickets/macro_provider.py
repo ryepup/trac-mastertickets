@@ -34,7 +34,8 @@ class MasterTicketsMacros(Component):
                 'show_ticket_number':"1",
                 'milestone':'',
                 'group_by_milestone':'1',
-                'debug':'0'}
+                'debug':'0',
+                'word_wrap_char_limit':'30'}
 
 
     def get_macros(self):
@@ -79,8 +80,28 @@ class MasterTicketsMacros(Component):
         extract arguments and name parameters from the `content` inside the
         parentheses, in the latter situation). (''since 0.12'')
         """
-        def q(txt):
-            return '"%s"' % txt.replace('"', '\\"')
+        def escape(txt, chars):
+            if chars:
+                char = chars.pop()
+                return escape(txt.replace(char, '\\'+char), chars)
+            else:
+                return txt
+
+        # from http://code.activestate.com/recipes/148061-one-liner-word-wrap-function/
+        def wrap(text, width):
+            """
+            A word-wrap function that preserves existing line breaks
+            and most spaces in the text. Expects that existing line
+            breaks are posix newlines (\n).
+            """
+            return reduce(lambda line, word, width=width: '%s%s%s' %
+                          (line,
+                           ' \n'[(len(line)-line.rfind('\n')-1
+                                  + len(word.split('\n',1)[0]
+                                        ) >= width)],
+                           word),
+                          text.split(' ')
+                          )
 
         # http://www.colourlovers.com/palette/1930/cheer_up_emo_kid
         opts = MasterTicketsMacros.DEFAULT_OPTIONS.copy()
@@ -94,13 +115,24 @@ class MasterTicketsMacros(Component):
         if args:
             opts.update(args)        
 
+
+
         # convert boolean options to actual booleans
         for bopt in ['show_ticket_number','group_by_milestone', 'debug']:
             opts[bopt] = opts[bopt] == '1'
 
+        for iopt in ['word_wrap_char_limit', 'fontsize']:
+            opts[iopt] = int(opts[iopt])
+
+        word_wrap_char_limit = Options(**opts).word_wrap_char_limit
+        def q(txt):
+            return '"%s"' % escape(wrap(txt, word_wrap_char_limit), list('"')).replace('\n', '\\n')
+
+
         # quote things we should quote
         for o in ['unblocked_color','unblocked_linkcolor', 'blocked_color', 'blocked_linkcolor', 'closed_color', 'closed_linkcolor', 'critical_color', 'critical_linkcolor', 'label', 'graph_name']:
             opts[o] = q(opts[o])
+
         
         opts = Options(**opts)
 
@@ -198,7 +230,7 @@ class MasterTicketsMacros(Component):
 
                 if opts.show_ticket_number:
                     nodeopts['shape'] = 'record'
-                    nodeopts['label'] = q('%s|%s' % (tktid, tkt['summary']))
+                    nodeopts['label'] = q('%s|%s' % (tktid, escape(tkt['summary'], list('|<>{}'))))
 
 
                 
